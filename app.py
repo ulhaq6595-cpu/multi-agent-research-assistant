@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 # Load environment variables
 load_dotenv()
 
+# 🔒 SECURE: Keep default key empty so it never exposes secret keys in UI or GitHub
 DEFAULT_GROQ_KEY = ""
 
 # Page Configuration
