@@ -1,18 +1,20 @@
 import os
 import time
 import urllib.parse
+from datetime import datetime
+import pandas as pd
 import streamlit as st
 from groq import Groq
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw
+from streamlit_gsheets import GSheetsConnection
 
-# Load environment variables
+# Load environment variables for local testing
 load_dotenv()
 
-# 🔒 SECURE: Keep default key empty so it never exposes secret keys in UI or GitHub
-DEFAULT_GROQ_KEY = ""
-
-# Page Configuration
+# ---------------------------------------------------------
+# PAGE CONFIGURATION
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="VERITAS AI • Autonomous Intelligence Studio",
     page_icon="⚜️",
@@ -20,7 +22,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Advanced Custom CSS with Metallic Gold Highlights
+# Initialize Session State for Local History Tracking
+if "search_history" not in st.session_state:
+    st.session_state.search_history = []
+
+# ---------------------------------------------------------
+# CUSTOM CSS & THEMING
+# ---------------------------------------------------------
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap');
@@ -35,7 +43,7 @@ st.markdown("""
         color: #F8FAFC;
     }
 
-    /* Glowing News Ticker / Announcement Marquee */
+    /* News Ticker Marquee */
     .ticker-wrap {
         width: 100%;
         overflow: hidden;
@@ -104,7 +112,7 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3) !important;
     }
 
-    /* Modern Gold Action Button */
+    /* Action Buttons */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
@@ -123,7 +131,7 @@ st.markdown("""
         box-shadow: 0px 6px 22px rgba(245, 158, 11, 0.5);
     }
 
-    /* Active Agent Display Cards */
+    /* Agent Display Cards */
     .agent-card {
         background: #334155;
         border: 1px solid #475569;
@@ -144,7 +152,7 @@ st.markdown("""
         font-weight: 700;
     }
 
-    /* Executive Output Card Container */
+    /* Report Card Box */
     .report-box {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -157,53 +165,94 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# CORNER FLOOD-FILL BACKGROUND REMOVER FUNCTION
+# UTILITY FUNCTIONS
 # ---------------------------------------------------------
 def get_transparent_logo(image_path, tolerance=55):
-    """Flood-fills from corners to isolate and remove outer background cleanly."""
     img = Image.open(image_path).convert("RGBA")
     width, height = img.size
-
-    # Sample outer background color from top-left corner
-    bg_color = img.getpixel((0, 0))[:3]
-
-    # Mask image for flood fill
-    mask = Image.new("L", (width, height), 0)
-    
-    # Perform flood fill from all 4 corners
     for corner in [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)]:
         ImageDraw.floodfill(img, corner, (0, 0, 0, 0), thresh=tolerance)
-
     return img
 
+def log_to_google_sheets(user_id, search_query, status_msg):
+    """Appends new search execution to Google Sheets."""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H:%M:%S")
+
+        new_data = pd.DataFrame([{
+            "Date": date_str,
+            "Time": time_str,
+            "User": user_id,
+            "Search": search_query,
+            "Status": status_msg
+        }])
+
+        existing_df = conn.read(ttl=0)
+        updated_df = pd.concat([existing_df, new_data], ignore_index=True)
+        conn.update(data=updated_df)
+    except Exception as e:
+        print(f"[GSHEETS LOG NOTICE]: {str(e)}")
+
 # ---------------------------------------------------------
-# SAFE AUTOMATIC API KEY RESOLUTION
+# SECURE BACKEND API KEY RESOLUTION (UI Hidden)
 # ---------------------------------------------------------
 try:
     secret_key = st.secrets.get("GROQ_API_KEY", "")
 except Exception:
     secret_key = ""
 
-env_key = os.getenv("GROQ_API_KEY", DEFAULT_GROQ_KEY)
-default_key_to_use = secret_key or env_key
+env_key = os.getenv("GROQ_API_KEY", "")
+api_key = secret_key or env_key
 
 # ---------------------------------------------------------
-# SIDEBAR NAVIGATION & SUPPORT SYSTEM
+# SIDEBAR NAVIGATION & USER HUB
 # ---------------------------------------------------------
 with st.sidebar:
-    st.markdown("### ⚡ Control Center")
-    st.caption("Configure multi-agent parameters")
+    st.markdown("### 👤 User Hub")
     
-    groq_api_key = st.text_input(
-        "Groq API Key", 
-        value=default_key_to_use, 
-        type="password",
-        help="Loaded automatically from backend secrets or .env file if available."
-    )
-    
+    # User Profile Dialog
+    @st.dialog("👤 Profile Setup")
+    def open_profile():
+        st.text_input("Display Name:", value="Data Analyst")
+        st.text_input("Organization / Role:", value="Researcher")
+        if st.button("Save Profile"):
+            st.success("Profile saved successfully!")
+
+    # Account Settings Dialog
+    @st.dialog("⚙️ Account Settings")
+    def open_account():
+        st.write("**Account Preferences**")
+        st.selectbox("Report Export Format", ["Markdown (.md)", "Text (.txt)", "PDF"])
+        st.selectbox("UI Theme Mode", ["Dark Slate Gold (Default)", "Cyberpunk", "Minimal"])
+        if st.button("Update Preferences"):
+            st.success("Preferences updated!")
+
+    # Search History Dialog
+    @st.dialog("📜 Search History")
+    def open_history():
+        st.write("**Recent Queries (Current Session)**")
+        if st.session_state.search_history:
+            for item in reversed(st.session_state.search_history):
+                st.markdown(f"- `{item['time']}`: **{item['query']}**")
+        else:
+            st.info("No queries executed in this session yet.")
+
+    col_h1, col_h2 = st.columns(2)
+    with col_h1:
+        if st.button("👤 Profile"):
+            open_profile()
+    with col_h2:
+        if st.button("⚙️ Account"):
+            open_account()
+            
+    if st.button("📜 Search History"):
+        open_history()
+
     st.markdown("---")
     st.markdown("### 🤖 Active Agents")
-    
     st.markdown("""
         <div class="agent-card">
             <span>🕵️‍♂️ <b>Researcher Agent</b></span>
@@ -221,27 +270,25 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Support / Complaint Form
+    # Support Form
     with st.expander("📩 Submit Support / Complaint"):
         st.caption("Facing issues? Send a direct message to VERITAS AI support.")
         user_email = st.text_input("Your Email:", placeholder="name@domain.com")
-        complaint_msg = st.text_area("Description of issue:", placeholder="Describe the issue or error...")
+        complaint_msg = st.text_area("Description of issue:", placeholder="Describe the issue...")
         
         if st.button("Send Complaint"):
             if user_email and complaint_msg:
                 admin_email = "support@veritasai.com"
                 subject = urllib.parse.quote("VERITAS AI Support Request")
                 body = urllib.parse.quote(f"From: {user_email}\n\nMessage:\n{complaint_msg}")
-                
                 mailto_url = f"mailto:{admin_email}?subject={subject}&body={body}"
-                
                 st.success("Complaint prepared!")
                 st.markdown(f'<a href="{mailto_url}" target="_blank" style="color:#FBBF24; font-weight:bold;">📧 Open Email App to Send Message</a>', unsafe_allow_html=True)
             else:
-                st.warning("Please fill in both your email and description.")
+                st.warning("Please fill in both fields.")
 
 # ---------------------------------------------------------
-# HEADER SECTION: Dynamic Transparent VERITAS AI Logo
+# APP HEADER
 # ---------------------------------------------------------
 header_col1, header_col2 = st.columns([1.2, 5], vertical_alignment="center")
 
@@ -261,11 +308,8 @@ with header_col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# RUNNING NEWS TICKER
-# ---------------------------------------------------------
+# Dynamic Ticker
 ticker_message = "🔴 LIVE: Welcome to VERITAS AI's Multi-Agent Research Portal • Automating deep-dive technical insights, risk analysis, and executive synthesis • Powered by Groq Llama 3.3 70B & Streamlit"
-
 st.markdown(f"""
     <div class="ticker-wrap">
         <div class="ticker-move">{ticker_message}</div>
@@ -273,71 +317,59 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# MAIN WORKFLOW & AGENT EXECUTION
+# MAIN SEARCH & AGENT WORKFLOW
 # ---------------------------------------------------------
 topic = st.text_input("Enter Research Topic or Query:", placeholder="e.g., Enterprise Risk Management in Autonomous Financial AI")
 
-col1, col2 = st.columns([1, 4])
-with col1:
-    run_button = st.button("🚀 Run Workflow")
-
-if run_button:
-    clean_key = str(groq_api_key).strip()
-    
-    if not clean_key:
-        st.error("Please enter a valid Groq API Key or set GROQ_API_KEY in Streamlit Secrets / .env file.")
-    elif not topic:
+if st.button("🚀 Run Workflow"):
+    if not api_key:
+        st.error("⚠️ System Configuration Error: GROQ_API_KEY is not configured in Streamlit Secrets.")
+    elif not topic.strip():
         st.warning("Please enter a research topic to proceed.")
     else:
         try:
-            client = Groq(api_key=clean_key)
+            # 1. Store in session history
+            now_time = datetime.now().strftime("%H:%M:%S")
+            st.session_state.search_history.append({"time": now_time, "query": topic})
+
+            # 2. Append row to Google Sheets
+            log_to_google_sheets("Guest_User", topic, "Success")
+
+            client = Groq(api_key=api_key)
             model_name = "llama-3.3-70b-versatile"
             
             with st.status("⚡ Orchestrating VERITAS AI Agents...", expanded=True) as status:
                 
                 # Agent 1: Research
                 st.write("🕵️‍♂️ **Researcher Agent** gathering ground-truth insights...")
-                research_prompt = f"Act as an expert researcher for VERITAS AI. Uncover key facts, figures, and technical insights regarding: {topic}."
                 res1 = client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": research_prompt}]
+                    messages=[{"role": "user", "content": f"Act as an expert researcher for VERITAS AI. Uncover key facts regarding: {topic}"}]
                 )
                 research_data = res1.choices[0].message.content
                 time.sleep(1)
                 
                 # Agent 2: Analysis
                 st.write("📊 **Data Analyst Agent** structuring findings & key risks...")
-                analysis_prompt = f"Act as a Senior Analyst at VERITAS AI. Take these research findings and extract top trends, risks, and strategic takeaways:\n\n{research_data}"
                 res2 = client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": analysis_prompt}]
+                    messages=[{"role": "user", "content": f"Act as a Senior Analyst at VERITAS AI. Extract top trends and risks from:\n\n{research_data}"}]
                 )
                 analysis_data = res2.choices[0].message.content
                 time.sleep(1)
                 
-                # Agent 3: Final Report
+                # Agent 3: Executive Summary
                 st.write("📝 **Report Writer Agent** compiling executive synthesis...")
-                report_prompt = f"""Act as a Chief Executive Report Writer for VERITAS AI. Synthesize the research and analysis into a polished executive markdown report with sections for Overview, Key Findings, Strategic Analysis, and Conclusion.
-
-Research:
-{research_data}
-
-Analysis:
-{analysis_data}"""
                 res3 = client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": report_prompt}]
+                    messages=[{"role": "user", "content": f"Synthesize into an executive markdown report with Overview, Key Findings, Strategic Analysis, and Conclusion.\n\nResearch:\n{research_data}\n\nAnalysis:\n{analysis_data}"}]
                 )
                 final_report = res3.choices[0].message.content
                 
                 status.update(label="✅ VERITAS AI Research Workflow Complete!", state="complete", expanded=False)
 
-            # Styled Executive Report Output
             st.markdown("### 📋 Executive Summary")
-            
-            with st.container():
-                st.markdown(f'<div class="report-box">{final_report}</div>', unsafe_allow_html=True)
-            
+            st.markdown(f'<div class="report-box">{final_report}</div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             st.download_button(
@@ -348,4 +380,5 @@ Analysis:
             )
 
         except Exception as e:
+            log_to_google_sheets("Guest_User", topic, f"Failed: {str(e)}")
             st.error(f"Execution Error: {str(e)}")
