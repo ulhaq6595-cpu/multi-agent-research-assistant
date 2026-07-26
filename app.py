@@ -2,12 +2,11 @@ import os
 import time
 import urllib.parse
 from datetime import datetime
-import pandas as pd
+import requests
 import streamlit as st
 from groq import Groq
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw
-from streamlit_gsheets import GSheetsConnection
 
 # Load environment variables
 load_dotenv()
@@ -29,7 +28,7 @@ if "username" not in st.session_state:
     st.session_state.username = "Guest User"
 
 # ---------------------------------------------------------
-# ADVANCED CUSTOM CSS & STYLING
+# CUSTOM CSS (WITH MOBILE NAVIGATION FIX)
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -44,7 +43,30 @@ st.markdown("""
         color: #F8FAFC;
     }
 
-    /* Professional Top Notice Banner */
+    /* ---------------------------------------------------------
+       MOBILE-RESPONSIVE HEADER BUTTONS FIX
+       Forces top navigation columns to stay horizontal on mobile
+       --------------------------------------------------------- */
+    div[data-testid="column"] {
+        width: auto !important;
+        flex: 1 1 auto !important;
+        min-width: 0px !important;
+    }
+
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .stButton > button {
+        font-size: 0.78rem !important;
+        padding: 6px 10px !important;
+        white-space: nowrap !important;
+        border-radius: 6px !important;
+    }
+
+    /* Notice Banner */
     .notice-banner {
         background: linear-gradient(90deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
         border-left: 4px solid #F59E0B;
@@ -65,7 +87,7 @@ st.markdown("""
         line-height: 1.5;
     }
 
-    /* Dynamic Multi-Function Ticker */
+    /* Live Ticker */
     .ticker-wrap {
         width: 100%;
         overflow: hidden;
@@ -90,7 +112,7 @@ st.markdown("""
         100% { transform: translate3d(-100%, 0, 0); }
     }
 
-    /* Titles */
+    /* Title Styling */
     .company-title {
         font-size: 2.6rem;
         font-weight: 800;
@@ -107,23 +129,7 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* Navigation Header Bar Buttons */
-    .nav-btn button {
-        background-color: #1E293B !important;
-        color: #F8FAFC !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        padding: 8px 12px !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-    .nav-btn button:hover {
-        border-color: #F59E0B !important;
-        color: #FBBF24 !important;
-        transform: translateY(-1px);
-    }
-
-    /* YouTube / Google Search History Cards */
+    /* History Cards */
     .history-card {
         background: #1E293B;
         border: 1px solid #334155;
@@ -170,6 +176,7 @@ st.markdown("""
         font-weight: 700;
     }
 
+    /* Output Report Container */
     .report-box {
         background-color: #1E293B;
         border: 1px solid #334155;
@@ -182,7 +189,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# LOGO & GSHEETS LOGGING FUNCTIONS
+# UTILITY FUNCTIONS
 # ---------------------------------------------------------
 def get_transparent_logo(image_path, tolerance=55):
     img = Image.open(image_path).convert("RGBA")
@@ -192,21 +199,24 @@ def get_transparent_logo(image_path, tolerance=55):
     return img
 
 def log_to_google_sheets(user_id, search_query, status_msg):
+    """Logs search entries reliably via Google Apps Script Webhook."""
+    webhook_url = st.secrets.get("WEBHOOK_URL", "")
+    if not webhook_url:
+        return
+    
+    now = datetime.now()
+    payload = {
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%I:%M:%S %p"),
+        "user": user_id,
+        "search": search_query,
+        "status": status_msg
+    }
+    
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        now = datetime.now()
-        new_data = pd.DataFrame([{
-            "Date": now.strftime("%Y-%m-%d"),
-            "Time": now.strftime("%H:%M:%S"),
-            "User": user_id,
-            "Search": search_query,
-            "Status": status_msg
-        }])
-        existing_df = conn.read(ttl=0)
-        updated_df = pd.concat([existing_df, new_data], ignore_index=True)
-        conn.update(data=updated_df)
+        requests.post(webhook_url, json=payload, timeout=5)
     except Exception as e:
-        print(f"[GSHEETS LOG NOTICE]: {str(e)}")
+        print(f"[GSHEET LOG ERROR]: {str(e)}")
 
 # Secure API Resolution
 try:
@@ -218,13 +228,12 @@ env_key = os.getenv("GROQ_API_KEY", "")
 api_key = secret_key or env_key
 
 # ---------------------------------------------------------
-# DIALOG MODALS FOR NAVIGATION
+# DIALOG MODALS
 # ---------------------------------------------------------
 @st.dialog("✨ Why VERITAS AI?")
 def open_why_veritas():
     st.markdown("### 🚀 How VERITAS AI Outperforms Standard AI Tools")
-    st.write("Traditional single-prompt AI models often produce generalized, unchecked answers. VERITAS AI deploys an **Autonomous Multi-Agent Architecture**:")
-    
+    st.write("Traditional single-prompt AI models often produce generalized answers. VERITAS AI deploys an **Autonomous Multi-Agent Architecture**:")
     st.markdown("""
     * 🕵️‍♂️ **Researcher Agent:** Performs autonomous context acquisition and ground-truth gathering.
     * 📊 **Analyst Agent:** Cross-checks findings, extracts quantitative trends, and isolates operational risks.
@@ -235,9 +244,9 @@ def open_why_veritas():
 @st.dialog("📜 Search History")
 def open_history():
     st.markdown("### 🔍 Recent Search Queries")
-    st.caption("Google & YouTube style session history tracking")
+    st.caption("Session history tracking")
     if st.session_state.search_history:
-        for idx, item in enumerate(reversed(st.session_state.search_history)):
+        for item in reversed(st.session_state.search_history):
             st.markdown(f"""
                 <div class="history-card">
                     <div>
@@ -262,7 +271,6 @@ def open_profile():
 @st.dialog("🔐 Account Access")
 def open_account():
     tab1, tab2 = st.tabs(["🔐 Sign In", "📝 Sign Up"])
-    
     with tab1:
         st.text_input("Email / Username", key="login_email", placeholder="user@veritasai.com")
         st.text_input("Password", type="password", key="login_pass")
@@ -282,22 +290,22 @@ def open_account():
 # ---------------------------------------------------------
 # HEADER & NAVIGATION ROW
 # ---------------------------------------------------------
-nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns([1.5, 1.2, 1.5, 1.2, 1.8])
+nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns([1, 1, 1, 1, 1])
 
 with nav_col1:
     if st.button("🏠 Home", key="btn_home", use_container_width=True):
         st.rerun()
 with nav_col2:
-    if st.button("✨ Why VERITAS?", key="btn_why", use_container_width=True):
+    if st.button("✨ Why?", key="btn_why", use_container_width=True):
         open_why_veritas()
 with nav_col3:
-    if st.button("📜 Search History", key="btn_hist", use_container_width=True):
+    if st.button("📜 History", key="btn_hist", use_container_width=True):
         open_history()
 with nav_col4:
     if st.button("👤 Profile", key="btn_prof", use_container_width=True):
         open_profile()
 with nav_col5:
-    btn_label = f"👤 {st.session_state.username}" if st.session_state.is_logged_in else "🔐 Login / Sign Up"
+    btn_label = f"👤 {st.session_state.username.split()[0]}" if st.session_state.is_logged_in else "🔐 Login"
     if st.button(btn_label, key="btn_acc", use_container_width=True):
         open_account()
 
@@ -308,9 +316,9 @@ header_col1, header_col2 = st.columns([1.2, 5], vertical_alignment="center")
 
 with header_col1:
     if os.path.exists("logo.jpg"):
-        st.image(get_transparent_logo("logo.jpg"), width=120)
+        st.image(get_transparent_logo("logo.jpg"), width=110)
     elif os.path.exists("logo.png"):
-        st.image(get_transparent_logo("logo.png"), width=120)
+        st.image(get_transparent_logo("logo.png"), width=110)
     else:
         st.image("https://cdn-icons-png.flaticon.com/512/2103/2103633.png", width=90)
 
@@ -320,9 +328,6 @@ with header_col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# PROFESSIONAL IMPACT BANNER & EXPANDED TICKER
-# ---------------------------------------------------------
 st.markdown("""
     <div class="notice-banner">
         <span class="notice-tag">📌 NOTE:</span>
@@ -340,7 +345,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SIDEBAR SYSTEM
+# SIDEBAR
 # ---------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🤖 Active Agents")
@@ -378,7 +383,7 @@ with st.sidebar:
                 st.warning("Please fill in both fields.")
 
 # ---------------------------------------------------------
-# MAIN SEARCH WORKFLOW
+# MAIN WORKFLOW
 # ---------------------------------------------------------
 topic = st.text_input("Enter Research Topic or Query:", placeholder="e.g., Enterprise Risk Management in Autonomous Financial AI")
 
@@ -392,7 +397,7 @@ if st.button("🚀 Run Workflow"):
             now_time = datetime.now().strftime("%I:%M %p")
             st.session_state.search_history.append({"time": now_time, "query": topic})
 
-            # Log execution to Google Sheets
+            # Append to Google Sheet via Webhook
             log_to_google_sheets(st.session_state.username, topic, "Success")
 
             client = Groq(api_key=api_key)
