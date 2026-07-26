@@ -28,7 +28,7 @@ if "username" not in st.session_state:
     st.session_state.username = "Guest User"
 
 # ---------------------------------------------------------
-# CUSTOM CSS (WITH MOBILE NAVIGATION FIX)
+# CUSTOM CSS (MOBILE SINGLE-PAGE COMPACT LAYOUT)
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -44,26 +44,42 @@ st.markdown("""
     }
 
     /* ---------------------------------------------------------
-       MOBILE-RESPONSIVE HEADER BUTTONS FIX
-       Forces top navigation columns to stay horizontal on mobile
+       STRICT MOBILE SINGLE-ROW NAVBAR FIX
+       Forces 5 columns into 100% viewport width without scrolling
        --------------------------------------------------------- */
-    div[data-testid="column"] {
-        width: auto !important;
-        flex: 1 1 auto !important;
-        min-width: 0px !important;
-    }
-
     div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
         flex-direction: row !important;
-        gap: 6px !important;
         flex-wrap: nowrap !important;
+        width: 100% !important;
+        gap: 3px !important;
+        overflow-x: hidden !important;
     }
 
-    .stButton > button {
-        font-size: 0.78rem !important;
-        padding: 6px 10px !important;
-        white-space: nowrap !important;
+    div[data-testid="column"] {
+        flex: 1 1 0px !important;
+        min-width: 0px !important;
+        width: auto !important;
+    }
+
+    div[data-testid="column"] .stButton > button {
+        width: 100% !important;
+        font-size: 0.65rem !important;
+        padding: 4px 2px !important;
         border-radius: 6px !important;
+        white-space: nowrap !important;
+        text-overflow: ellipsis !important;
+        overflow: hidden !important;
+    }
+
+    @media (min-width: 768px) {
+        div[data-testid="column"] .stButton > button {
+            font-size: 0.85rem !important;
+            padding: 8px 12px !important;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 8px !important;
+        }
     }
 
     /* Notice Banner */
@@ -114,17 +130,17 @@ st.markdown("""
 
     /* Title Styling */
     .company-title {
-        font-size: 2.6rem;
+        font-size: 2.2rem;
         font-weight: 800;
         background: linear-gradient(90deg, #F59E0B, #D97706, #FBBF24, #FEF08A);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         line-height: 1.1;
-        letter-spacing: 1.5px;
+        letter-spacing: 1.2px;
     }
     .company-subtitle {
         color: #CBD5E1;
-        font-size: 0.98rem;
+        font-size: 0.9rem;
         margin-top: 4px;
         font-weight: 500;
     }
@@ -181,7 +197,7 @@ st.markdown("""
         background-color: #1E293B;
         border: 1px solid #334155;
         border-radius: 12px;
-        padding: 28px;
+        padding: 24px;
         margin-top: 20px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
@@ -290,7 +306,7 @@ def open_account():
 # ---------------------------------------------------------
 # HEADER & NAVIGATION ROW
 # ---------------------------------------------------------
-nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns([1, 1, 1, 1, 1])
+nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
 
 with nav_col1:
     if st.button("🏠 Home", key="btn_home", use_container_width=True):
@@ -309,18 +325,18 @@ with nav_col5:
     if st.button(btn_label, key="btn_acc", use_container_width=True):
         open_account()
 
-st.markdown("<hr style='border:1px solid #334155; margin-top:10px; margin-bottom:20px;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border:1px solid #334155; margin-top:8px; margin-bottom:18px;'>", unsafe_allow_html=True)
 
 # Main Branding Header
-header_col1, header_col2 = st.columns([1.2, 5], vertical_alignment="center")
+header_col1, header_col2 = st.columns([1, 4], vertical_alignment="center")
 
 with header_col1:
     if os.path.exists("logo.jpg"):
-        st.image(get_transparent_logo("logo.jpg"), width=110)
+        st.image(get_transparent_logo("logo.jpg"), width=95)
     elif os.path.exists("logo.png"):
-        st.image(get_transparent_logo("logo.png"), width=110)
+        st.image(get_transparent_logo("logo.png"), width=95)
     else:
-        st.image("https://cdn-icons-png.flaticon.com/512/2103/2103633.png", width=90)
+        st.image("https://cdn-icons-png.flaticon.com/512/2103/2103633.png", width=80)
 
 with header_col2:
     st.markdown('<div class="company-title">VERITAS AI</div>', unsafe_allow_html=True)
