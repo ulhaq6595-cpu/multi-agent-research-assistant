@@ -28,7 +28,7 @@ if "username" not in st.session_state:
     st.session_state.username = "Guest User"
 
 # ---------------------------------------------------------
-# CUSTOM CSS (MOBILE SINGLE-PAGE COMPACT LAYOUT)
+# CUSTOM CSS (PURE HTML NAVBAR & MOBILE FIX)
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -44,41 +44,47 @@ st.markdown("""
     }
 
     /* ---------------------------------------------------------
-       STRICT MOBILE SINGLE-ROW NAVBAR FIX
-       Forces 5 columns into 100% viewport width without scrolling
+       PURE HTML FLEX NAVBAR (GUARANTEED MOBILE FIT)
        --------------------------------------------------------- */
-    div[data-testid="stHorizontalBlock"] {
+    .nav-container {
         display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
         width: 100% !important;
-        gap: 3px !important;
-        overflow-x: hidden !important;
+        margin-bottom: 15px !important;
     }
 
-    div[data-testid="column"] {
+    .nav-link-btn {
         flex: 1 1 0px !important;
-        min-width: 0px !important;
-        width: auto !important;
+        text-align: center !important;
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border: 1px solid #334155 !important;
+        padding: 8px 2px !important;
+        border-radius: 6px !important;
+        font-size: 0.70rem !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        display: inline-block !important;
+        transition: all 0.2s ease-in-out !important;
     }
 
-    div[data-testid="column"] .stButton > button {
-        width: 100% !important;
-        font-size: 0.65rem !important;
-        padding: 4px 2px !important;
-        border-radius: 6px !important;
-        white-space: nowrap !important;
-        text-overflow: ellipsis !important;
-        overflow: hidden !important;
+    .nav-link-btn:hover {
+        background-color: #334155 !important;
+        border-color: #F59E0B !important;
+        color: #F59E0B !important;
     }
 
     @media (min-width: 768px) {
-        div[data-testid="column"] .stButton > button {
+        .nav-link-btn {
             font-size: 0.85rem !important;
-            padding: 8px 12px !important;
+            padding: 10px 12px !important;
         }
-        div[data-testid="stHorizontalBlock"] {
-            gap: 8px !important;
+        .nav-container {
+            gap: 10px !important;
         }
     }
 
@@ -304,26 +310,34 @@ def open_account():
             st.success("Account created successfully! You can now log in.")
 
 # ---------------------------------------------------------
-# HEADER & NAVIGATION ROW
+# HEADER & NAVIGATION ROW (RESPONSIVE FLEX NAVBAR)
 # ---------------------------------------------------------
-nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
+btn_label = f"👤 {st.session_state.username.split()[0]}" if st.session_state.is_logged_in else "🔐 Login"
 
-with nav_col1:
-    if st.button("🏠 Home", key="btn_home", use_container_width=True):
-        st.rerun()
-with nav_col2:
-    if st.button("✨ Why?", key="btn_why", use_container_width=True):
-        open_why_veritas()
-with nav_col3:
-    if st.button("📜 History", key="btn_hist", use_container_width=True):
-        open_history()
-with nav_col4:
-    if st.button("👤 Profile", key="btn_prof", use_container_width=True):
-        open_profile()
-with nav_col5:
-    btn_label = f"👤 {st.session_state.username.split()[0]}" if st.session_state.is_logged_in else "🔐 Login"
-    if st.button(btn_label, key="btn_acc", use_container_width=True):
-        open_account()
+st.markdown(f"""
+    <div class="nav-container">
+        <a href="?nav=home" target="_self" class="nav-link-btn">🏠 Home</a>
+        <a href="?nav=why" target="_self" class="nav-link-btn">✨ Why?</a>
+        <a href="?nav=history" target="_self" class="nav-link-btn">📜 History</a>
+        <a href="?nav=profile" target="_self" class="nav-link-btn">👤 Profile</a>
+        <a href="?nav=login" target="_self" class="nav-link-btn">{btn_label}</a>
+    </div>
+""", unsafe_allow_html=True)
+
+# Handle Query Parameters for Modals
+query_params = st.query_params
+if query_params.get("nav") == "why":
+    st.query_params.clear()
+    open_why_veritas()
+elif query_params.get("nav") == "history":
+    st.query_params.clear()
+    open_history()
+elif query_params.get("nav") == "profile":
+    st.query_params.clear()
+    open_profile()
+elif query_params.get("nav") == "login":
+    st.query_params.clear()
+    open_account()
 
 st.markdown("<hr style='border:1px solid #334155; margin-top:8px; margin-bottom:18px;'>", unsafe_allow_html=True)
 
